@@ -1,4 +1,3 @@
-
 const express = require("express");
 const ActivityLog = require("../models/ActivityLog");
 const protect = require("../middleware/protect");
