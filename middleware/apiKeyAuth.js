@@ -1,4 +1,3 @@
-
 const apiKeyAuth = (req, res, next) => {
     const apiKey = req.headers["x-api-key"];
 
