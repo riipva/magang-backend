@@ -1,4 +1,3 @@
-
 jest.mock("../models/Todo", () => ({
     countDocuments: jest.fn()
 }));
