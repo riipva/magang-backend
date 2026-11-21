@@ -22,9 +22,50 @@ const catchAsync = require("./utils/catchAsync");
 
 const app = express();
 
+let dbConnectionPromise;
+
+const connectDB = async () => {
+    if (
+        !process.env.MONGODB_URI ||
+        !process.env.JWT_SECRET ||
+        !process.env.API_KEY
+    ) {
+        throw new Error(
+            "MONGODB_URI, JWT_SECRET, dan API_KEY wajib diisi."
+        );
+    }
+
+    if (mongoose.connection.readyState === 1) {
+        return;
+    }
+
+    if (!dbConnectionPromise || mongoose.connection.readyState === 0) {
+        dbConnectionPromise = mongoose
+            .connect(process.env.MONGODB_URI)
+            .catch((error) => {
+                dbConnectionPromise = null;
+                throw error;
+            });
+    }
+
+    await dbConnectionPromise;
+
+    console.log("MongoDB berhasil terhubung.");
+};
+
 // Middleware utama
 app.use(express.json());
 app.use(logger);
+
+// Koneksi database untuk setiap permintaan
+app.use(async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
 
 // Dokumentasi Swagger
 app.use(
@@ -93,7 +134,7 @@ app.get(
     })
 );
 
-// Route Statistics dengan API Key
+// Route Statistics
 app.use("/api/statistics", statisticsRoutes);
 
 // Route untuk mengecek server
@@ -121,12 +162,17 @@ app.get("/api/protected", protect, (req, res) => {
 });
 
 // Route khusus admin
-app.get("/api/admin", protect, restrictTo("admin"), (req, res) => {
-    res.status(200).json({
-        status: "success",
-        message: "Akses admin berhasil."
-    });
-});
+app.get(
+    "/api/admin",
+    protect,
+    restrictTo("admin"),
+    (req, res) => {
+        res.status(200).json({
+            status: "success",
+            message: "Akses admin berhasil."
+        });
+    }
+);
 
 // Menangani route yang tidak ditemukan
 app.use(notFound);
@@ -134,35 +180,32 @@ app.use(notFound);
 // Menangani error
 app.use(errorHandler);
 
-// Konfigurasi server
+// Menjalankan server secara lokal
 const PORT = process.env.PORT || 3000;
 
 const startServer = async () => {
     try {
-        if (
-            !process.env.MONGODB_URI ||
-            !process.env.JWT_SECRET ||
-            !process.env.API_KEY
-        ) {
-            throw new Error(
-                "MONGODB_URI, JWT_SECRET, dan API_KEY wajib diisi di file .env."
-            );
-        }
-
-        await mongoose.connect(process.env.MONGODB_URI);
-        console.log("MongoDB berhasil terhubung.");
+        await connectDB();
 
         app.listen(PORT, () => {
-            console.log(`Server berjalan di http://localhost:${PORT}`);
+            console.log(
+                `Server berjalan di http://localhost:${PORT}`
+            );
         });
     } catch (error) {
-        console.error("Gagal menjalankan server:", error.message);
+        console.error(
+            "Gagal menjalankan server:",
+            error.message
+        );
+
         process.exit(1);
     }
 };
 
+// Hanya menjalankan listen saat dijalankan secara lokal
 if (require.main === module) {
     startServer();
 }
 
+// Export aplikasi untuk Vercel
 module.exports = app;
